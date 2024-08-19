@@ -4,12 +4,15 @@ namespace Garnet
 {
     class GraphNode 
     {
+        public byte[] Name { get; set; }
         public byte[] Value { get; set; }
         readonly List<GraphNode> ajacencyNodes;
 
-        public GraphNode(byte[] value)
+        public GraphNode(byte[] name, byte[] value)
         {
-            this.Value = value;
+
+            Name = name;
+            Value = value;
             ajacencyNodes = new();
         }
 

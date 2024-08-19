@@ -94,6 +94,9 @@ namespace Garnet
 
             server.Register.NewProcedure("SUM", new Sum());
             server.Register.NewProcedure("SETMAINANDOBJECT", new SetStringAndList());
+
+            // Register graph extension
+            server.Register.NewCommand("GADD", CommandType.ReadModifyWrite, factory, new MyDictSet(), new RespCommandsInfo { Arity = 5 });
         }
     }
 }

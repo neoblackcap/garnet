@@ -44,6 +44,7 @@ namespace Garnet
                 if (newVal.Length > value.Length) return false;
                 newVal.CopyTo(value);
                 valueLength = newVal.Length;
+                //生成
             }
             // +OK is sent as response, by default
             return true;
