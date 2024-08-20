@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -9,27 +10,57 @@ using System.Text;
 using System.Transactions;
 using Garnet.server;
 using Tsavorite.core;
+using Tsavorite.devices;
 
 namespace Garnet
 {
     class Graph : CustomObjectBase
     {
-        private readonly Dictionary<byte[], byte[]> _nodeGraphDict;
         private readonly GraphNode _root;
+
         private readonly Dictionary<byte[], GraphNode> _nodeNameDict;
 
+        static readonly int OverHead = MemoryUtils.DictionaryOverhead + IntPtr.Size;
+
         public Graph(byte type)
-            : base(type, 0, MemoryUtils.DictionaryOverhead)
+            : base(type, 0, OverHead)
         {
-            _nodeGraphDict = new(ByteArrayComparer.Instance);
             _root = new(Guid.NewGuid().ToByteArray(), null);
         }
 
         public Graph(byte type, BinaryReader reader)
-            : base(type, reader, MemoryUtils.DictionaryOverhead)
+            : base(type, reader, OverHead)
         {
-            _nodeGraphDict = new(ByteArrayComparer.Instance);
+            _nodeNameDict = new(ByteArrayComparer.Instance);
+            _root = new(Guid.NewGuid().ToByteArray(), null);
 
+            DeserializeObject(reader);
+        }
+
+        public Graph(Graph obj)
+            : base(obj)
+        {
+            _nodeNameDict = obj._nodeNameDict;
+            _root = obj._root;
+        }
+
+        public override CustomObjectBase CloneObject() => new Graph(this);
+
+
+        public override void SerializeObject(BinaryWriter writer)
+        {
+            writer.Write(_nodeNameDict.Count);
+            foreach (var kv in _nodeNameDict)
+            {
+                writer.Write(kv.Key.Length);
+                writer.Write(kv.Key);
+                writer.Write(kv.Value.Id);
+                writer.Write(kv.Value);
+            }
+        }
+
+        public void DeserializeObject(BinaryReader reader)
+        {
             int count = reader.ReadInt32();
             for (int i = 0; i < count; i++)
             {
@@ -39,32 +70,7 @@ namespace Garnet
 
                 UpdateSize(key, value);
             }
-        }
 
-        // quicksort
-
-
-
-
-        public Graph(Graph obj)
-            : base(obj)
-        {
-            _nodeGraphDict = obj._nodeGraphDict;
-        }
-
-        public override CustomObjectBase CloneObject() => new Graph(this);
-
-
-        public override void SerializeObject(BinaryWriter writer)
-        {
-            writer.Write(_nodeGraphDict.Count);
-            foreach (var kvp in _nodeGraphDict)
-            {
-                writer.Write(kvp.Key.Length);
-                writer.Write(kvp.Key);
-                writer.Write(kvp.Value.Length);
-                writer.Write(kvp.Value);
-            }
         }
 
         public override void Dispose()
@@ -75,22 +81,18 @@ namespace Garnet
         public bool Add(byte[] parent, byte[] child, byte[] value)
         {
             var delimeter = Encoding.UTF8.GetBytes(":");
-            long size = _root.Name.Length + delimeter.Length + child.Length;
+            var parentName = BytesJoin(_root.Name, delimeter, parent);
 
-            var name = new byte[size];
-
-            Array.Copy(_root.Name, name, _root.Name.Length);
-            Array.Copy(delimeter, 0, name, parent.Length, delimeter.Length);
-            Array.Copy(parent, 0, name, _root.Name.Length + delimeter.Length, child.Length);
-
-            if (!_nodeNameDict.TryGetValue(parent, out var parentNode))
+            if (!_nodeNameDict.TryGetValue(parentName, out var parentNode))
             {
                 return false;
             }
 
             var node = new GraphNode(child, value);
 
-            if (!_nodeNameDict.TryAdd(child, node)) {
+            var childName = BytesJoin(_root.Name, delimeter, parent);
+            if (!_nodeNameDict.TryAdd(childName, node))
+            {
                 return false;
             }
 
@@ -99,15 +101,15 @@ namespace Garnet
             return true;
         }
 
-        private byte[] BytesJoin(params byte[][] contents)
+        private static byte[] BytesJoin(params IList<byte[]> contents)
         {
-            var size = contents.Sum(x => x.Length);
-            var result = new byte[size];
-            long current = 0;
+            var result = new byte[contents.Sum(x => x.Length)];
 
-            for (int i = 0; i < contents.Length; i++)
+            long written = 0;
+            foreach (var content in contents)
             {
-                Array.Copy(contents[i], 0, result, 0, contents[i].Length);
+                Array.Copy(content, 0, result, written, content.Length);
+                written += content.Length;
             }
 
             return result;
@@ -176,18 +178,6 @@ namespace Garnet
             // Indicates end of collection has been reached.
             if (cursor == _nodeGraphDict.Count)
                 cursor = 0;
-        }
-
-        public bool Set(byte[] key, byte[] value)
-        {
-            if (_nodeGraphDict.TryGetValue(key, out var oldValue))
-            {
-                UpdateSize(key, oldValue, false);
-            }
-
-            _nodeGraphDict[key] = value;
-            UpdateSize(key, value);
-            return true;
         }
 
         private void UpdateSize(byte[] key, byte[] value, bool add = true)

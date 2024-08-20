@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 
 namespace Garnet
 {
@@ -6,13 +7,15 @@ namespace Garnet
     {
         public byte[] Name { get; set; }
         public byte[] Value { get; set; }
+
+        public byte[] Id {get;set;}
         readonly List<GraphNode> ajacencyNodes;
 
         public GraphNode(byte[] name, byte[] value)
         {
-
             Name = name;
             Value = value;
+            Id = Guid.NewGuid().ToByteArray();
             ajacencyNodes = new();
         }
 
