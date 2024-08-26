@@ -16,23 +16,23 @@ namespace Garnet
 {
     class Graph : CustomObjectBase
     {
-        private readonly GraphNode _root;
+        private readonly GraphNode root;
 
-        private readonly Dictionary<byte[], GraphNode> _nodeNameDict;
+        private readonly Dictionary<byte[], GraphNode> nodeNameDict;
 
         static readonly int OverHead = MemoryUtils.DictionaryOverhead + IntPtr.Size;
 
         public Graph(byte type)
             : base(type, 0, OverHead)
         {
-            _root = new(Guid.NewGuid().ToByteArray(), null);
+            root = new(Guid.NewGuid().ToByteArray(), null);
         }
 
         public Graph(byte type, BinaryReader reader)
             : base(type, reader, OverHead)
         {
-            _nodeNameDict = new(ByteArrayComparer.Instance);
-            _root = new(Guid.NewGuid().ToByteArray(), null);
+            nodeNameDict = new(ByteArrayComparer.Instance);
+            root = new(Guid.NewGuid().ToByteArray(), null);
 
             DeserializeObject(reader);
         }
@@ -40,8 +40,8 @@ namespace Garnet
         public Graph(Graph obj)
             : base(obj)
         {
-            _nodeNameDict = obj._nodeNameDict;
-            _root = obj._root;
+            nodeNameDict = obj.nodeNameDict;
+            root = obj.root;
         }
 
         public override CustomObjectBase CloneObject() => new Graph(this);
@@ -49,21 +49,23 @@ namespace Garnet
 
         public override void SerializeObject(BinaryWriter writer)
         {
-            writer.Write(_nodeNameDict.Count);
-            foreach (var kv in _nodeNameDict)
+            var nodes = TopologicalSort();
+            writer.Write(nodes.Count);
+            foreach (var node in TopologicalSort())
             {
-                writer.Write(kv.Key.Length);
-                writer.Write(kv.Key);
-                writer.Write(kv.Value.Id);
-                writer.Write(kv.Value);
+                node.Serialize(writer);
             }
         }
 
         public void DeserializeObject(BinaryReader reader)
         {
             int count = reader.ReadInt32();
+            var nodes = new List<GraphNode>(count);
             for (int i = 0; i < count; i++)
             {
+                var node = new GraphNode(reader);
+                node.Add(node);
+
                 var key = reader.ReadBytes(reader.ReadInt32());
                 var value = reader.ReadBytes(reader.ReadInt32());
                 _nodeGraphDict.Add(key, value);
@@ -77,21 +79,53 @@ namespace Garnet
         {
         }
 
+        public List<GraphNode> TopologicalSort()
+        {
+            var compareFn = EqualityComparer<GraphNode>.Create((a, b) => ByteArrayComparer.Instance.Equals(a.Id, b.Id));
+            var visited = new HashSet<GraphNode>(compareFn);
+            var stack = new Stack<GraphNode>();
+
+            stack.Push(root);
+            var result = new List<GraphNode>();
+
+            foreach (var node in stack)
+            {
+                if (!visited.Add(node))
+                {
+                    throw new Exception("Graph has cycle");
+                }
+
+                if (node.IsLeaf)
+                {
+                    result.Add(node);
+                }
+                else
+                {
+                    foreach (var ajaNode in node)
+                        stack.Push(ajaNode);
+                }
+
+            }
+
+            result.Reverse();
+            return result;
+        }
+
 
         public bool Add(byte[] parent, byte[] child, byte[] value)
         {
             var delimeter = Encoding.UTF8.GetBytes(":");
-            var parentName = BytesJoin(_root.Name, delimeter, parent);
+            var parentName = BytesJoin(root.Name, delimeter, parent);
 
-            if (!_nodeNameDict.TryGetValue(parentName, out var parentNode))
+            if (!nodeNameDict.TryGetValue(parentName, out var parentNode))
             {
                 return false;
             }
 
             var node = new GraphNode(child, value);
 
-            var childName = BytesJoin(_root.Name, delimeter, parent);
-            if (!_nodeNameDict.TryAdd(childName, node))
+            var childName = BytesJoin(root.Name, delimeter, parent);
+            if (!nodeNameDict.TryAdd(childName, node))
             {
                 return false;
             }
@@ -191,9 +225,5 @@ namespace Garnet
             Debug.Assert(this.Size >= MemoryUtils.DictionaryOverhead);
         }
 
-        public bool TryGetValue(byte[] key, [MaybeNullWhen(false)] out byte[] value)
-        {
-            return _nodeGraphDict.TryGetValue(key, out value);
-        }
     }
 }
