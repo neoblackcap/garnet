@@ -64,13 +64,8 @@ namespace Garnet
             for (int i = 0; i < count; i++)
             {
                 var node = new GraphNode(reader);
-                node.Add(node);
-
-                var key = reader.ReadBytes(reader.ReadInt32());
-                var value = reader.ReadBytes(reader.ReadInt32());
-                _nodeGraphDict.Add(key, value);
-
-                UpdateSize(key, value);
+                nodes.Add(node);
+                // UpdateSize(key, value);
             }
 
         }

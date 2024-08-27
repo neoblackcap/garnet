@@ -5,10 +5,12 @@ using Microsoft.VisualBasic;
 using System.Runtime.InteropServices;
 using Garnet.server;
 using System.Collections;
+using System.Linq;
+using Garnet.networking;
 
 namespace Garnet
 {
-    class GraphNode: IEnumerable<GraphNode>
+    class GraphNode : IEnumerable<GraphNode>
     {
         public byte[] Name { get; set; }
         public byte[] Value { get; set; }
@@ -33,6 +35,11 @@ namespace Garnet
             ajacencyNodes = new();
         }
 
+        public GraphNode(BinaryReader reader)
+        {
+            Deserialize(reader);
+        }
+
         public void Add(GraphNode node)
         {
             ajacencyNodes.Add(node);
@@ -45,7 +52,34 @@ namespace Garnet
 
         public void Serialize(BinaryWriter writer)
         {
-            int len = Name.Length + Value.Length + Id.Length;
+            int headerLen = Name.Length + Value.Length + Id.Length + (3 * sizeof(int));
+            var ajacencyNodeIds = ajacencyNodes.Select((node) => node.Id);
+            int nodeLen = ajacencyNodes.Select(node => node.Id.Length).Sum();
+            byte[] nodes = ajacencyNodes.Select(node => node.Id).Aggregate((left, right) =>
+            {
+                byte[] result = new byte[left.Length + right.Length];
+                Buffer.BlockCopy(left, 0, result, 0, left.Length);
+                Buffer.BlockCopy(right, 0, result, left.Length, right.Length);
+                return result;
+            });
+
+            int totalLen = headerLen + nodeLen;
+            writer.Write(totalLen);
+            writer.Write(Name.Length);
+            writer.Write(Name);
+            writer.Write(Value.Length);
+            writer.Write(Value);
+            writer.Write(Id.Length);
+            writer.Write(Id);
+            writer.Write(nodes);
+        }
+
+        public void Deserialize(BinaryReader reader)
+        {
+            int totalLen = reader.ReadInt32();
+            Name = reader.ReadBytes(reader.ReadInt32());
+            Value = reader.ReadBytes(reader.ReadInt32());
+            Id = reader.ReadBytes(reader.ReadInt32());
 
         }
 
@@ -54,12 +88,12 @@ namespace Garnet
             for (var i = 0; i < ajacencyNodes.Count; i++)
             {
                 yield return ajacencyNodes[i];
-                
+
             }
 
         }
 
-        IEnumerator IEnumerable.GetEnumerator() 
+        IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
         }
