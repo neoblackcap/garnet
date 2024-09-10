@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Transactions;
@@ -76,8 +77,7 @@ namespace Garnet
 
         public List<GraphNode> TopologicalSort()
         {
-            var compareFn = EqualityComparer<GraphNode>.Create((a, b) => ByteArrayComparer.Instance.Equals(a.Id, b.Id));
-            var visited = new HashSet<GraphNode>(compareFn);
+            var visited = new HashSet<GraphNode>();
             var stack = new Stack<GraphNode>();
 
             stack.Push(root);
@@ -97,7 +97,9 @@ namespace Garnet
                 else
                 {
                     foreach (var ajaNode in node)
+                    {
                         stack.Push(ajaNode);
+                    }
                 }
 
             }
@@ -162,13 +164,13 @@ namespace Garnet
             items = new();
             int index = 0;
 
-            if (_nodeGraphDict.Count < start)
+            if (nodeNameDict.Count < start)
             {
                 cursor = 0;
                 return;
             }
 
-            foreach (var item in _nodeGraphDict)
+            foreach (var item in nodeNameDict)
             {
                 if (index < start)
                 {
@@ -195,7 +197,7 @@ namespace Garnet
                 }
 
                 if (addToList)
-                    items.Add(item.Value);
+                    items.Add(item.Value.Value);
 
                 cursor++;
 
@@ -205,7 +207,7 @@ namespace Garnet
             }
 
             // Indicates end of collection has been reached.
-            if (cursor == _nodeGraphDict.Count)
+            if (cursor == nodeNameDict.Count)
                 cursor = 0;
         }
 
