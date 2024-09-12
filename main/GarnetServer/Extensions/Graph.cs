@@ -68,7 +68,6 @@ namespace Garnet
                 nodes.Add(node);
                 // UpdateSize(key, value);
             }
-
         }
 
         public override void Dispose()
